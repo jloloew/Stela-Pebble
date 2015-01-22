@@ -3,29 +3,34 @@
     "capabilities": [
         ""
     ],
-    "companyName": "satern693@gmail.com",
+    "companyName": "Justin Loew",
     "longName": "Stela-Linked",
     "projectType": "native",
     "resources": {
         "media": [
             {
-                "file": "images/game_pane.png",
-                "name": "IMAGE_GAME_PANE",
+                "file": "images/droid-serif-28-bold-preview.png",
+                "name": "DROID_SERIF_28_BOLD_PREVIEW",
                 "type": "png-trans"
             },
             {
-                "file": "images/Stela_Icon.png",
-                "name": "IMAGE_STELA_ICON",
-                "type": "png"
+                "file": "images/roboto-condensed-21-preview.png",
+                "name": "ROBOTO_CONDENSED_21_PREVIEW",
+                "type": "png-trans"
             },
             {
-                "file": "images/rewind.png",
-                "name": "IMAGE_REWIND",
-                "type": "png"
+                "file": "images/gothic-28-preview.png",
+                "name": "GOTHIC_28_PREVIEW",
+                "type": "png-trans"
             },
             {
-                "file": "images/pause.png",
-                "name": "IMAGE_PAUSE",
+                "file": "images/gothic-28-bold-preview.png",
+                "name": "GOTHIC_28_BOLD_PREVIEW",
+                "type": "png-trans"
+            },
+            {
+                "file": "images/Font_Banner.png",
+                "name": "IMAGE_FONT_BANNER",
                 "type": "png"
             },
             {
@@ -34,9 +39,24 @@
                 "type": "png"
             },
             {
-                "file": "images/Font_Banner.png",
-                "name": "IMAGE_FONT_BANNER",
+                "file": "images/pause.png",
+                "name": "IMAGE_PAUSE",
                 "type": "png"
+            },
+            {
+                "file": "images/rewind.png",
+                "name": "IMAGE_REWIND",
+                "type": "png"
+            },
+            {
+                "file": "images/Stela_Icon.png",
+                "name": "IMAGE_STELA_ICON",
+                "type": "png"
+            },
+            {
+                "file": "images/game_pane.png",
+                "name": "IMAGE_GAME_PANE",
+                "type": "png-trans"
             }
         ]
     },
