@@ -395,20 +395,20 @@ static void init()
 	layer_add_child(window_layer, bitmap_layer_get_layer(image_layer));
 	layer_add_child(window_layer, bitmap_layer_get_layer(rewind_layer));
 	
-	// set up AppMessage
-	appmesg_init();
-	
 	// Set up the word list
 	wl_init();
+	
+	// set up AppMessage
+	appmesg_init();
 }
 
 
 static void deinit()
 {
+	appmesg_deinit();
+	
 	// Delete the word list
 	wl_deinit();
-	
-	appmesg_deinit();
 	
 	gbitmap_destroy(image);
 	gbitmap_destroy(game_bg);

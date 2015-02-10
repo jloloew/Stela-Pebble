@@ -7,28 +7,63 @@
 static Version phone_version = { .major = 0, .minor = 0, .patch = 0 };
 
 // Receiving Messages
-static void receive_block_size_message(Tuple *tuple)	__attribute__((nonnull));
-static void receive_words(DictionaryIterator *iterator)	__attribute__((nonnull));
-static void receive_error(Tuple *tuple)					__attribute__((nonnull));
-static void receive_version_number(Tuple *tuple)		__attribute__((nonnull));
+static void receive_block_size_message(Tuple *tuple) __attribute__((nonnull));
+static void receive_words(DictionaryIterator *iterator) __attribute__((nonnull));
+static void receive_error(Tuple *tuple) __attribute__((nonnull));
+static void receive_version_number(Tuple *tuple) __attribute__((nonnull));
 // Sending Messages
 static void send_version_number(void);
-	// Helpers for sending messages.
+// Helpers for sending messages.
+	/*!
+	 * Open the AppMessage outbox to prepare to send a message.
+	 * 
+	 * @return The DictionaryIterator to write the outgoing message into. 
+	 */
 static DictionaryIterator * _appmesg_send_helper1(void);
+	/*!
+	 * Send the message in the outbox.
+	 * 
+	 * @param iterator The DictionaryIterator containing the outgoing message.
+	 * @param dict_result The result of adding the key-value pair to the iterator. Used for error handling.
+	 */
 static void _appmesg_send_helper2(DictionaryIterator *iterator,
 								  const DictionaryResult dict_result) __attribute__((nonnull));
-static void _appmesg_send_int(    const int key, const int32_t     value);
-static void _appmesg_send_uint(   const int key, const uint32_t    value);
-static void _appmesg_send_cstring(const int key, const char *const value) __attribute__((nonnull));
+	/*!
+	 * Create and send a key-value pair via AppMessage.
+	 * 
+	 * @param key The key to use for the value in the AppMessage.
+	 * @param value The int value to send.
+	 */
+static void _appmesg_send_int(const int key,
+							  const int32_t value);
+	/*!
+	 * Create and send a key-value pair via AppMessage.
+	 * 
+	 * @param key The key to use for the value in the AppMessage.
+	 * @param value The unsigned int value to send.
+	 */
+static void _appmesg_send_uint(const int key,
+							   const uint32_t value);
+	/*!
+	 * Create and send a key-value pair via AppMessage.
+	 * 
+	 * @param key The key to use for the value in the AppMessage.
+	 * @param value The C string to send.
+	 */
+static void _appmesg_send_cstring(const int key,
+								  const char *const value) __attribute__((nonnull));
 
 // Callbacks
-	// callback for when a new message comes in from the phone
-void appmesg_received_handler(DictionaryIterator *iterator, void *context __attribute__((unused)));
-	// callback for when an error occurs while trying to receive a new message
-void appmesg_not_received_handler(AppMessageResult reason, void *context __attribute__((unused)));
-	// Successfully sent a message.
-void appmesg_sent_handler(DictionaryIterator *iterator, void *context __attribute__((unused)));
-	// An error occurred while sending a message.
+	/// callback for when a new message comes in from the phone
+void appmesg_received_handler(DictionaryIterator *iterator,
+							  void *context __attribute__((unused)));
+	/// callback for when an error occurs while trying to receive a new message
+void appmesg_not_received_handler(AppMessageResult reason,
+								  void *context __attribute__((unused)));
+	/// Successfully sent a message.
+void appmesg_sent_handler(DictionaryIterator *iterator,
+						  void *context __attribute__((unused)));
+	/// An error occurred while sending a message.
 void appmesg_not_sent_handler(DictionaryIterator *iterator,
 							  AppMessageResult reason,
 							  void *context __attribute__((unused)));
@@ -43,13 +78,33 @@ void appmesg_init(void)
 	app_message_register_inbox_dropped(appmesg_not_received_handler);
 	app_message_register_outbox_sent(appmesg_sent_handler);
 	app_message_register_outbox_failed(appmesg_not_sent_handler);
-	
+	/*
+	// calculate AppMessage inbox/outbox buffer sizes
+	// Formula is from https://developer.getpebble.com/docs/c/group___dictionary.html#ga0551d069624fb5bfc066fecfa4153bde
+	uint32_t inbox_size = 0, outbox_size = 0;
+	unsigned int avg_word_size = 10;
+	unsigned int avg_num_words = 10;
+	inbox_size = 1 + // dictionary header
+		// 1 Tuple per control message
+		(APPMESG_FIRST_WORD * 7) + // 7 bytes for each Tuple's header
+		(APPMESG_FIRST_WORD * 4) + // 4 bytes for the ints in each Tuple
+		// 1 Tuple per word
+		(avg_num_words * 7) + // 7 bytes for each Tuple's header
+		(avg_num_words * (avg_word_size + 1)); // Add the size of each word
+	outbox_size = 200;
+	APP_LOG(APP_LOG_LEVEL_DEBUG, "%s:%d: Setting AppMessage inbox/outbox sizes to %d/%d",
+			__func__, __LINE__, inbox_size, outbox_size);
+	// open AppMessage communication
+	AppMessageResult open_result = app_message_open(inbox_size, outbox_size);
+	*/
 	// open AppMessage communication
 	AppMessageResult open_result = app_message_open(APPMESG_INBOX_SIZE, APPMESG_OUTBOX_SIZE);
 	if (open_result == APP_MSG_OK) {
-		APP_LOG(APP_LOG_LEVEL_DEBUG, "AppMessage opened successfully.");
+		APP_LOG(APP_LOG_LEVEL_DEBUG, "%s:%d: AppMessage opened successfully.",
+			   __func__, __LINE__);
 	} else {
-		APP_LOG(APP_LOG_LEVEL_ERROR, "AppMessage failed to open.");
+		APP_LOG(APP_LOG_LEVEL_ERROR, "%s:%d: AppMessage failed to open.",
+			   __func__, __LINE__);
 		//TODO: update UI to say "not connected" or something
 	}
 }
@@ -57,6 +112,7 @@ void appmesg_init(void)
 void appmesg_deinit(void)
 {
 	app_message_deregister_callbacks();
+	phone_version = (Version){ .major = 0, .minor = 0, .patch = 0 };
 }
 
 void appmesg_request_block(const unsigned int index)
@@ -76,7 +132,102 @@ void appmesg_send_error(const char *const error_msg)
 	}
 }
 
-/********** PRIVATE FUNCTIONS **********/
+/********** CALLBACKS **********/
+
+	// Route the received iterator to the correct function for processing.
+void appmesg_received_handler(DictionaryIterator *iterator, void *context)
+{
+	// safety first
+	if (!iterator) {
+		APP_LOG(APP_LOG_LEVEL_ERROR, "%s:%d: Received NULL dictionary.",
+				__func__, __LINE__);
+		return;
+	}
+	
+	// log it
+	APP_LOG(APP_LOG_LEVEL_DEBUG, "%s:%d: Received dict of size %u",
+			__func__, __LINE__, (unsigned int)dict_size(iterator));
+	
+	// check for an error
+	Tuple *curr_tuple = dict_find(iterator, (unsigned)ERROR_KEY);
+	if (curr_tuple) {
+		receive_error(curr_tuple);
+		return;
+	}
+	
+	// check for a version number
+	curr_tuple = dict_find(iterator, (unsigned)STELA_VERSION_KEY);
+	if (curr_tuple) {
+		receive_version_number(curr_tuple);
+		return;
+	}
+	
+	// check for a reset command
+	curr_tuple = dict_find(iterator, (unsigned)RESET_KEY);
+	if (curr_tuple) {
+		wl_reset();
+		return;
+	}
+	
+	// check for a block size request
+	curr_tuple = dict_find(iterator, (unsigned)TEXT_BLOCK_SIZE_KEY);
+	if (curr_tuple) {
+		APP_LOG(APP_LOG_LEVEL_DEBUG, "%s:%d: Received a request to change or send the block size.",
+				__func__, __LINE__);
+		receive_block_size_message(curr_tuple);
+		return;
+	}
+	
+	// check for a block number message
+	curr_tuple = dict_find(iterator, (unsigned)TOTAL_NUMBER_OF_BLOCKS_KEY);
+	if (curr_tuple) {
+		unsigned int total_num_blocks = curr_tuple->value->uint32;
+		wl_set_total_num_blocks(total_num_blocks);
+		APP_LOG(APP_LOG_LEVEL_DEBUG, "%s:%d: Set the total number of blocks to %d.",
+				__func__, __LINE__, total_num_blocks);
+		return;
+	}
+	
+	// check for a message with words
+	curr_tuple = dict_find(iterator, (unsigned)APPMESG_BLOCK_NUMBER_KEY);
+	if (curr_tuple) {
+		receive_words(iterator);
+		return;
+	}
+	
+	// unable to figure out what's in the message
+	curr_tuple = dict_read_first(iterator);
+	if (curr_tuple) {
+		int32_t key = (int32_t)curr_tuple->key;
+		APP_LOG(APP_LOG_LEVEL_ERROR, "%s:%d: Received message with unknown key: %ld",
+				__func__, __LINE__, key);
+	}
+}
+
+// An error occurred while receiving a new message.
+void appmesg_not_received_handler(AppMessageResult reason, void *context)
+{
+	// log the error
+	APP_LOG(APP_LOG_LEVEL_ERROR, "%s:%d: %s",
+			__func__, __LINE__, stringify_AppMessageResult(reason));
+}
+
+// Successfully sent a message.
+void appmesg_sent_handler(DictionaryIterator *iterator, void *context)
+{
+	APP_LOG(APP_LOG_LEVEL_DEBUG, "%s:%d: Successfully sent message.",
+			__func__, __LINE__);
+}
+
+// An error occurred while sending a message.
+void appmesg_not_sent_handler(DictionaryIterator *iterator,
+							  AppMessageResult reason,
+							  void *context)
+{
+	// log the error
+	APP_LOG(APP_LOG_LEVEL_ERROR, "%s:%d: %s",
+			__func__, __LINE__, stringify_AppMessageResult(reason));
+}
 
 /********** RECEIVE HELPERS **********/
 
@@ -89,13 +240,13 @@ static void receive_block_size_message(Tuple *tuple)
 	// verify the value's type and size are correct
 	TupleType value_type = tuple->type;
 	if (value_type != TUPLE_INT) {
-		APP_LOG(APP_LOG_LEVEL_ERROR,
-				"%s: Requested block size is not a signed int value.",
-				__func__);
+		APP_LOG(APP_LOG_LEVEL_ERROR, "%s:%d: Requested block size is not a signed int value.",
+				__func__, __LINE__);
 		return;
 	}
 	if (tuple->length != 4) {
-		APP_LOG(APP_LOG_LEVEL_ERROR, "%s: Requested block size is not a 32-bit value.", __func__);
+		APP_LOG(APP_LOG_LEVEL_ERROR, "%s:%d: Requested block size is not a 32-bit value.",
+				__func__, __LINE__);
 		return;
 	}
 	
@@ -109,7 +260,8 @@ static void receive_block_size_message(Tuple *tuple)
 		// negate it before we send it, so it's not a command.
 		value = -value;
 	} else {
-		APP_LOG(APP_LOG_LEVEL_DEBUG, "%s: The phone's block size is %d.", __func__, -value);
+		APP_LOG(APP_LOG_LEVEL_DEBUG, "%s:%d: The phone's block size is %d.",
+				__func__, __LINE__, -value);
 	}
 	
 	// Send our block size to the phone, whether or not we changed ours.
@@ -155,7 +307,8 @@ static void receive_words(DictionaryIterator *iterator)
 		}
 		char *copied_word = malloc(word_length * sizeof(char));
 		if (!copied_word) {
-			APP_LOG(APP_LOG_LEVEL_ERROR, "%s: Out of memory.", __func__);
+			APP_LOG(APP_LOG_LEVEL_ERROR, "%s:%d: Out of memory.",
+					__func__, __LINE__);
 		}
 		strncpy(copied_word, (const char *)&curr_tuple->value->cstring, word_length);
 		
@@ -165,16 +318,19 @@ static void receive_words(DictionaryIterator *iterator)
 		word_num++;
 	}
 	
-	APP_LOG(APP_LOG_LEVEL_DEBUG, "%s: Added %d words.", __func__, word_num);
+	APP_LOG(APP_LOG_LEVEL_DEBUG, "%s:%d: Added %d words.",
+			__func__, __LINE__, word_num);
 }
 
 static void receive_error(Tuple *tuple)
 {
 	if (tuple->type == TUPLE_CSTRING) {
 		const char *error_message = (const char *)&tuple->value->cstring;
-		APP_LOG(APP_LOG_LEVEL_ERROR, "%s: %s", __func__, error_message);
+		APP_LOG(APP_LOG_LEVEL_ERROR, "%s:%d: %s",
+				__func__, __LINE__, error_message);
 	} else {
-		APP_LOG(APP_LOG_LEVEL_ERROR, "%s: Received non-string error.", __func__);
+		APP_LOG(APP_LOG_LEVEL_ERROR, "%s:%d: Received non-string error.",
+				__func__, __LINE__);
 	}
 }
 
@@ -190,7 +346,8 @@ static void receive_version_number(Tuple *tuple)
 		send_version_number();
 	} else {
 		phone_version = ver;
-		APP_LOG(APP_LOG_LEVEL_DEBUG, "%s: Phone has version %s", __func__, ver_str);
+		APP_LOG(APP_LOG_LEVEL_DEBUG, "%s:%d: Phone has version %s",
+				__func__, __LINE__, ver_str);
 	}
 }
 
@@ -209,39 +366,33 @@ static void send_version_number(void)
 static DictionaryIterator * _appmesg_send_helper1(void)
 {
 	DictionaryIterator *iterator = NULL;
-	
 	// open the outbox to prepare to send a message
 	AppMessageResult appmesg_result = app_message_outbox_begin(&iterator);
 	if (appmesg_result != APP_MSG_OK) {
 		// failure
-		APP_LOG(APP_LOG_LEVEL_ERROR,
-				"%s: Unable to open outbox while preparing: %s",
-				__func__,
-				stringify_AppMessageResult(appmesg_result));
+		APP_LOG(APP_LOG_LEVEL_ERROR, "%s:%d: Unable to open outbox while preparing: %s",
+				__func__, __LINE__, stringify_AppMessageResult(appmesg_result));
 	}
-	
 	return iterator;
 }
 
-static void _appmesg_send_helper2(DictionaryIterator *iterator, const DictionaryResult dict_result)
+static void _appmesg_send_helper2(DictionaryIterator *iterator,
+								  const DictionaryResult dict_result)
 {
 	if (dict_result != DICT_OK) { // error handling
-		APP_LOG(APP_LOG_LEVEL_ERROR,
-				"%s: Dict error: %s",
-				__func__,
-				stringify_DictResult(dict_result));
+		APP_LOG(APP_LOG_LEVEL_ERROR, "%s:%d: Dict error: %s",
+				__func__, __LINE__, stringify_DictResult(dict_result));
 		goto fail;
 	}
 	
 	// send the message
 	AppMessageResult appmesg_result = app_message_outbox_send();
 	if (appmesg_result != APP_MSG_OK) {
-		APP_LOG(APP_LOG_LEVEL_ERROR,
-				"%s: Error sending message: %s",
-				__func__,
-				stringify_AppMessageResult(appmesg_result));
+		APP_LOG(APP_LOG_LEVEL_ERROR, "%s:%d: Error sending message: %s",
+				__func__, __LINE__, stringify_AppMessageResult(appmesg_result));
 	} else {
-		APP_LOG(APP_LOG_LEVEL_DEBUG, "Successfully sent message.");
+		APP_LOG(APP_LOG_LEVEL_DEBUG, "%s:%d: Successfully sent message.",
+			   __func__, __LINE__);
 	}
 	
 fail:
@@ -277,93 +428,4 @@ static void _appmesg_send_cstring(const int key, const char *const value)
 													  (uint32_t)key,
 													  value);
 	_appmesg_send_helper2(iterator, dict_result);
-}
-
-/********** CALLBACKS **********/
-
-	// Route the received iterator to the correct function for processing.
-void appmesg_received_handler(DictionaryIterator *iterator, void *context)
-{
-	// safety first
-	if (!iterator) {
-		APP_LOG(APP_LOG_LEVEL_ERROR, "%s: Received NULL dictionary.", __func__);
-		return;
-	}
-	
-	// check for an error
-	Tuple *curr_tuple = dict_find(iterator, (unsigned)ERROR_KEY);
-	if (curr_tuple) {
-		receive_error(curr_tuple);
-		return;
-	}
-	
-	// check for a version number
-	curr_tuple = dict_find(iterator, (unsigned)STELA_VERSION_KEY);
-	if (curr_tuple) {
-		receive_version_number(curr_tuple);
-		return;
-	}
-	
-	// check for a reset command
-	curr_tuple = dict_find(iterator, (unsigned)RESET_KEY);
-	if (curr_tuple) {
-		wl_reset();
-		return;
-	}
-	
-	// check for a block size request
-	curr_tuple = dict_find(iterator, (unsigned)TEXT_BLOCK_SIZE_KEY);
-	if (curr_tuple) {
-		APP_LOG(APP_LOG_LEVEL_DEBUG,
-				"%s: Received a request to change or send the block size.",
-				__func__);
-		receive_block_size_message(curr_tuple);
-		return;
-	}
-	
-	// check for a block number message
-	curr_tuple = dict_find(iterator, (unsigned)TOTAL_NUMBER_OF_BLOCKS_KEY);
-	if (curr_tuple) {
-		unsigned int total_num_blocks = curr_tuple->value->uint32;
-		wl_set_total_num_blocks(total_num_blocks);
-		APP_LOG(APP_LOG_LEVEL_DEBUG,
-				"%s: Set the total number of blocks to %d.",
-				__func__,
-				total_num_blocks);
-		return;
-	}
-	
-	// check for a message with words
-	curr_tuple = dict_find(iterator, (unsigned)APPMESG_BLOCK_NUMBER_KEY);
-	if (curr_tuple) {
-		receive_words(iterator);
-		return;
-	}
-	
-	// unable to figure out what's in the message
-	curr_tuple = dict_read_first(iterator);
-	if (curr_tuple) {
-		int32_t key = (int32_t)curr_tuple->key;
-		APP_LOG(APP_LOG_LEVEL_ERROR, "%s: Received message with unknown key: %ld", __func__, key);
-	}
-}
-
-// An error occurred while receiving a new message.
-void appmesg_not_received_handler(AppMessageResult reason, void *context)
-{
-	// log the error
-	APP_LOG(APP_LOG_LEVEL_ERROR, "%s: %s", __func__, stringify_AppMessageResult(reason));
-}
-
-// Successfully sent a message.
-void appmesg_sent_handler(DictionaryIterator *iterator, void *context)
-{
-	APP_LOG(APP_LOG_LEVEL_DEBUG, "%s: Successfully sent message.", __func__);
-}
-
-// An error occurred while sending a message.
-void appmesg_not_sent_handler(DictionaryIterator *iterator, AppMessageResult reason, void *context)
-{
-	// log the error
-	APP_LOG(APP_LOG_LEVEL_ERROR, "%s: %s", __func__, stringify_AppMessageResult(reason));
 }

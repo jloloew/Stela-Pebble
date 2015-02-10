@@ -247,16 +247,15 @@ void wl_set_total_num_blocks(const unsigned int new_total)
 
 static Block * block_create(void)
 {
-	Block *new_block = malloc(sizeof(Block));
-	if (!new_block) {
-		return NULL;
-	}
-	new_block->block_index = 0;
-	new_block->words = calloc(block_size, sizeof(const char *));
-	if (!new_block->words) {
+	Block *new_block = (Block *)calloc(1, sizeof(Block));
+	char **words = (char **)calloc(block_size, sizeof(char *));
+	if (!new_block || !words) { // safety first
 		free(new_block);
+		free(words);
 		return NULL;
 	}
+	new_block->words = (const char **)words;
+	new_block->block_index = 0;
 	return new_block;
 }
 
@@ -268,9 +267,11 @@ static void block_destroy(Block *target)
 	
 	for (unsigned int i = 0; i < block_size; i++) {
 		char *word = (char *)(target->words[i]);
-		free(word); // no need to NULL the pointers
+		free(word);
+		target->words[i] = NULL;
 	}
 	free(target->words);
+	target->words = NULL;
 	free(target);
 }
 
