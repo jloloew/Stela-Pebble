@@ -30,7 +30,7 @@ const char *fonts[3] = {
 GFont disp_font;
 int font_id = 0;
 enum {
-	MENU,
+	MENU = 1,
 	BOOK,
 	SETTINGS
 } frame;
@@ -46,7 +46,7 @@ bool fast_rewind = false;
 bool end         = false;
 bool menu        = true;
 	// The word currently being displayed on-screen.
-const char *word;
+const char *word = NULL;
 	// The size of the word being displayed.
 int size_of_word = 256;
 

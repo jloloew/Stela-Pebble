@@ -1,13 +1,13 @@
-#include "JALWordList.h"
 #include <pebble.h>
 #include "keys.h"
 #include "JALAppMessage.h"
+#include "JALWordList.h"
 
 
 //TODO: fix this, make it nice
-extern void change_to_book();
+extern void change_to_book(void);
 
-typedef struct Block {
+typedef struct {
 	const char **words; // an array of strings, one for each word
 	unsigned int block_index; // the index of the Block
 } Block __attribute__((aligned));
@@ -15,41 +15,42 @@ typedef struct Block {
 static unsigned int block_size       = 300;
 static unsigned int total_num_blocks = 0;
 
-static Block *curr_block, *alt_block;
-static int curr_word_index = -1;
+static Block *curr_block;
+static Block *alt_block;
+static int curr_word_index = -1; // -1 if the index isn't valid
 
-static Block * create_block();
-static void destroy_block(Block *target) __attribute__((nonnull));
-static void swap_blocks();
+static Block * block_create(void);
+static void block_destroy(Block *target) __attribute__((nonnull));
+static void swap_blocks(void);
 
 
 /********** PUBLIC FUNCTIONS **********/
 
-void wl_init()
+void wl_init(void)
 {
-	wl_reset();
+	curr_block = block_create();
+	alt_block  = block_create();
 }
 
-void wl_deinit()
+void wl_deinit(void)
 {
-	destroy_block(alt_block);
-	destroy_block(curr_block);
+	block_destroy(alt_block);
+	block_destroy(curr_block);
 	alt_block = curr_block = NULL;
 }
 
-void wl_reset()
+void wl_reset(void)
 {
-	// keep the current block_size
-	
+	// destroy the old blocks
+	block_destroy(curr_block);
+	block_destroy(alt_block);
+	// create new, empty blocks
+	curr_block = block_create();
+	alt_block  = block_create();
 	// reset state
 	curr_word_index = -1;
 	wl_set_total_num_blocks(0);
-	// destroy the old blocks
-	destroy_block(curr_block);
-	destroy_block(alt_block);
-	// create new, empty blocks
-	curr_block = create_block();
-	alt_block  = create_block();
+	// keep the current block_size
 }
 
 	// does NOT make a copy the word
@@ -80,8 +81,8 @@ void wl_add_word(const char *new_word,
 		dest_block = alt_block;
 	} else {
 		// we have no data for this saved block. Wipe the alt_block clean and use that.
-		destroy_block(alt_block);
-		alt_block = create_block();
+		block_destroy(alt_block);
+		alt_block = block_create();
 		if (!alt_block) { // safety check
 			APP_LOG(APP_LOG_LEVEL_ERROR, "%s: Unable to allocate new alt_block.", __func__);
 			return;
@@ -97,7 +98,7 @@ void wl_add_word(const char *new_word,
 }
 
 	// returns NULL on error
-const char * wl_next_word()
+const char * wl_next_word(void)
 {
 	// swap out blocks if we reach the end of the current block
 	if (curr_word_index >= (signed)block_size) {
@@ -129,7 +130,7 @@ const char * wl_next_word()
 }
 
 	// returns NULL on error
-const char * wl_prev_word()
+const char * wl_prev_word(void)
 {
 	if (curr_word_index < 0) {
 		return NULL;
@@ -175,7 +176,7 @@ const char * wl_prev_word()
 	return word;
 }
 
-unsigned int wl_get_block_size()
+unsigned int wl_get_block_size(void)
 {
 	return block_size;
 }
@@ -208,20 +209,20 @@ void wl_set_block_size(const unsigned int num_words)
 	}
 	
 	// destroy the old blocks
-	destroy_block(curr_block);
-	destroy_block(alt_block);
+	block_destroy(curr_block);
+	block_destroy(alt_block);
 	// set the new size
 	block_size = num_words;
 	// create new, empty blocks
-	curr_block = create_block();
-	alt_block  = create_block();
+	curr_block = block_create();
+	alt_block  = block_create();
 	// request the new current block
 	if (new_block_index >= 0) {
 		appmesg_request_block((unsigned)new_block_index);
 	}
 }
 
-unsigned int wl_get_total_num_blocks()
+unsigned int wl_get_total_num_blocks(void)
 {
 	return total_num_blocks;
 }
@@ -232,19 +233,19 @@ void wl_set_total_num_blocks(const unsigned int new_total)
 	
 	// if we have a block past the max number, delete it
 	if (alt_block->block_index >= new_total) {
-		destroy_block(alt_block);
-		alt_block = create_block();
+		block_destroy(alt_block);
+		alt_block = block_create();
 	}
 	if (curr_block->block_index >= new_total) {
-		destroy_block(curr_block);
+		block_destroy(curr_block);
 		curr_block = alt_block;
-		alt_block  = create_block();
+		alt_block  = block_create();
 	}
 }
 
 /********* PRIVATE FUNCTIONS **********/
 
-static Block * create_block()
+static Block * block_create(void)
 {
 	Block *new_block = malloc(sizeof(Block));
 	if (!new_block) {
@@ -259,7 +260,7 @@ static Block * create_block()
 	return new_block;
 }
 
-static void destroy_block(Block *target)
+static void block_destroy(Block *target)
 {
 	if (!target) { // safety check
 		return;
@@ -273,7 +274,7 @@ static void destroy_block(Block *target)
 	free(target);
 }
 
-static void swap_blocks()
+static void swap_blocks(void)
 {
 	// swap the curr and alt blocks
 	Block *temp = curr_block;

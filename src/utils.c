@@ -2,11 +2,7 @@
 #include <pebble.h>
 
 
-	// Turns an AppMessageResult returned by an AppMessage function into its description. For debugging purposes.
-const char * stringify_AppMessageResult(const AppMessageResult reason);
-	// Turns a DictionaryResult returned by a Dictionary function into its description. For debugging purposes.
-const char * stringify_DictResult(const DictionaryResult reason);
-
+/********** IMPLEMENTATION **********/
 
 	// The caller must free the string returned.
 char * version_to_string(const Version ver)
@@ -20,12 +16,31 @@ char * version_to_string(const Version ver)
 	return ver_str;
 }
 
-Version string_to_version(const char *const str)
+Version string_to_version(const char * const str)
 {
 	Version ver = { .major = 0, .minor = 0, .patch = 0 };
-	if (str) {
-		sscanf(str, "%hhu.%hhu.%hhu", &ver.major, &ver.minor, &ver.patch);
+	
+	if (!str) { // safety check
+		return ver;
 	}
+	
+	unsigned char values[] = { 0, 0, 0 };
+	// start parsing from the back of the string
+	int index = strlen(str);
+	for (int i = ARRAY_SIZE(values) - 1; i >= 0; i--) {
+		unsigned char *curr_value = values + i;
+		unsigned char digit_position = 1; // Ex.: would be 10 for the 2 in 123
+		// parse the whole number
+		while (--index >= 0 && ('0' <= str[index] && str[index] <= '9')) {
+			unsigned char digit = str[index] - '0';
+			*curr_value += digit_position * digit;
+			digit_position *= 10;
+		}
+	}
+	
+	ver.major = values[0];
+	ver.minor = values[1];
+	ver.patch = values[2];
 	return ver;
 }
 

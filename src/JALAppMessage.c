@@ -1,7 +1,6 @@
-#include <pebble.h>
-#include "JALAppMessage.h"
-#include "keys.h"
+//#include <pebble.h>
 #include "utils.h"
+#include "JALAppMessage.h"
 #include "JALWordList.h"
 
 
@@ -13,9 +12,9 @@ static void receive_words(DictionaryIterator *iterator)	__attribute__((nonnull))
 static void receive_error(Tuple *tuple)					__attribute__((nonnull));
 static void receive_version_number(Tuple *tuple)		__attribute__((nonnull));
 // Sending Messages
-static void send_version_number();
+static void send_version_number(void);
 	// Helpers for sending messages.
-static DictionaryIterator * _appmesg_send_helper1();
+static DictionaryIterator * _appmesg_send_helper1(void);
 static void _appmesg_send_helper2(DictionaryIterator *iterator,
 								  const DictionaryResult dict_result) __attribute__((nonnull));
 static void _appmesg_send_int(    const int key, const int32_t     value);
@@ -34,15 +33,10 @@ void appmesg_not_sent_handler(DictionaryIterator *iterator,
 							  AppMessageResult reason,
 							  void *context __attribute__((unused)));
 
-	// Turns an AppMessageResult returned by an AppMessage function into its description. For debugging purposes.
-extern const char * stringify_AppMessageResult(const AppMessageResult reason);
-	// Turns a DictionaryResult returned by a Dictionary function into its description. For debugging purposes.
-extern const char * stringify_DictResult(const DictionaryResult reason);
-
 
 /********** PUBLIC FUNCTIONS **********/
 
-void appmesg_init()
+void appmesg_init(void)
 {
 	// register AppMessage handlers
 	app_message_register_inbox_received(appmesg_received_handler);
@@ -51,12 +45,7 @@ void appmesg_init()
 	app_message_register_outbox_failed(appmesg_not_sent_handler);
 	
 	// open AppMessage communication
-	// calculate the size of the inbox and outbox buffers
-	int size_of_word = 100; // we'll expect up to 99 characters per word
-	uint32_t inbox_size  = dict_calc_buffer_size(1, size_of_word);
-	uint32_t outbox_size = dict_calc_buffer_size(1, sizeof(int));
-	
-	AppMessageResult open_result = app_message_open(inbox_size, outbox_size);
+	AppMessageResult open_result = app_message_open(APPMESG_INBOX_SIZE, APPMESG_OUTBOX_SIZE);
 	if (open_result == APP_MSG_OK) {
 		APP_LOG(APP_LOG_LEVEL_DEBUG, "AppMessage opened successfully.");
 	} else {
@@ -65,7 +54,7 @@ void appmesg_init()
 	}
 }
 
-void appmesg_deinit()
+void appmesg_deinit(void)
 {
 	app_message_deregister_callbacks();
 }
@@ -130,14 +119,14 @@ static void receive_block_size_message(Tuple *tuple)
 static void receive_words(DictionaryIterator *iterator)
 {
 	int block_number = -1;
-	unsigned start_index = 0, num_words = 0;
+	unsigned start_index = 0, num_words = 0, first_word_key = 0;
 	
 	// get the block number
 	Tuple *curr_tuple = dict_find(iterator, (unsigned)APPMESG_BLOCK_NUMBER_KEY);
 	if (curr_tuple) {
 		block_number = curr_tuple->value->int32;
 	}
-	// get the starting index
+	// get the starting index of the word within the block
 	curr_tuple = dict_find(iterator, (unsigned)APPMESG_WORD_START_INDEX_KEY);
 	if (curr_tuple) {
 		start_index = curr_tuple->value->uint32;
@@ -147,9 +136,14 @@ static void receive_words(DictionaryIterator *iterator)
 	if (curr_tuple) {
 		num_words = curr_tuple->value->uint32;
 	}
+	// get the key for the first actual word in this message
+	curr_tuple = dict_find(iterator, (unsigned)APPMESG_FIRST_WORD_KEY);
+	if (curr_tuple) {
+		first_word_key = curr_tuple->value->uint32;
+	}
 	
 	// get each word, in order
-	unsigned word_num = 0;
+	unsigned word_num = first_word_key;
 	while (word_num < num_words) {
 		curr_tuple = dict_find(iterator, word_num);
 		
@@ -187,6 +181,7 @@ static void receive_error(Tuple *tuple)
 static void receive_version_number(Tuple *tuple)
 {
 	const char *ver_str = (const char *)&tuple->value->cstring;
+	// parse out the version
 	const Version ver = string_to_version(ver_str);
 	
 	// If the major is 0, it's a request for our version number.
@@ -201,7 +196,7 @@ static void receive_version_number(Tuple *tuple)
 
 /********** SEND HELPERS **********/
 
-static void send_version_number()
+static void send_version_number(void)
 {
 	// stringify the version number
 	char *ver_str = version_to_string(PEBBLE_STELA_VERSION);
@@ -211,7 +206,7 @@ static void send_version_number()
 	free(ver_str);
 }
 
-static DictionaryIterator * _appmesg_send_helper1()
+static DictionaryIterator * _appmesg_send_helper1(void)
 {
 	DictionaryIterator *iterator = NULL;
 	
