@@ -400,6 +400,8 @@ static void init()
 	
 	// set up AppMessage
 	appmesg_init();
+	
+	APP_LOG(APP_LOG_LEVEL_DEBUG, "Heap bytes used/free: %d/%d", heap_bytes_used(), heap_bytes_free());
 }
 
 

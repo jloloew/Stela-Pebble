@@ -7,18 +7,18 @@
  * Zero and positive values represent the index of the block the attached word belongs in.
  */
 typedef enum {
-	ERROR_KEY = 0,					///< For reporting an error, as a string.
-	STELA_VERSION_KEY,				///< For sending the version of Stela as a string.
-	RESET_KEY,						///< Reset command. Sent by the phone when a new article will be sent.
-	TEXT_BLOCK_SIZE_KEY,			///< Used to set the maximum number of words in each block.
-	TOTAL_NUMBER_OF_BLOCKS_KEY,		///< The number of blocks in the entire article.
-	APPMESG_NUM_WORDS_KEY,			///< The number of words contained in just the current message.
-	APPMESG_WORD_START_INDEX_KEY,	///< Used to send the index of the first word within the block.
-	APPMESG_BLOCK_NUMBER_KEY,		///< Holds the index of the block in the current message.
-	APPMESG_FIRST_WORD_KEY,			///< Used to send the dictionary key of the first word within this message.
-	APPMESG_FIRST_WORD				///< The value stored for this key is the first word.
-									///  Subsequent words should be stored for increasing keys from this key.
-									///  This value is always APPMESG_FIRST_WORD_KEY + 1.
+	ERROR_KEY = 0,						///< For reporting an error, as a string.
+	STELA_VERSION_KEY = 1,				///< For sending the version of Stela as a string.
+	RESET_KEY = 2,						///< Reset command. Sent by the phone when a new article will be sent.
+	TEXT_BLOCK_SIZE_KEY = 3,			///< Used to set the maximum number of words in each block.
+	TOTAL_NUMBER_OF_BLOCKS_KEY = 4,		///< The number of blocks in the entire article.
+	APPMESG_NUM_WORDS_KEY = 5,			///< The number of words contained in just the current message.
+	APPMESG_WORD_START_INDEX_KEY = 6,	///< Used to send the index of the first word within the block.
+	APPMESG_BLOCK_NUMBER_KEY = 7,		///< Holds the index of the block in the current message.
+	APPMESG_FIRST_WORD_KEY = 8,			///< Used to send the dictionary key of the first word within this message.
+	APPMESG_FIRST_WORD = 9				///< The value stored for this key is the first word.
+										///  Subsequent words should be stored for increasing keys from this key.
+										///  This value is always APPMESG_FIRST_WORD_KEY + 1.
 } EAppMessage_Keys;
 
 /// The app's UI state

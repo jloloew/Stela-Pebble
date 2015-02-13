@@ -12,7 +12,7 @@ typedef struct {
 	unsigned int block_index; // the index of the Block
 } Block __attribute__((aligned));
 
-static unsigned int block_size       = 300;
+static unsigned int block_size       = 200;
 static unsigned int total_num_blocks = 0;
 
 static Block *curr_block;

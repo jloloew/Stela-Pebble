@@ -137,6 +137,9 @@ void appmesg_send_error(const char *const error_msg)
 	// Route the received iterator to the correct function for processing.
 void appmesg_received_handler(DictionaryIterator *iterator, void *context)
 {
+	APP_LOG(APP_LOG_LEVEL_DEBUG, "%s:%d: Used/free memory: %d/%d",
+				__func__, __LINE__, heap_bytes_used(), heap_bytes_free());
+	
 	// safety first
 	if (!iterator) {
 		APP_LOG(APP_LOG_LEVEL_ERROR, "%s:%d: Received NULL dictionary.",
@@ -271,33 +274,34 @@ static void receive_block_size_message(Tuple *tuple)
 static void receive_words(DictionaryIterator *iterator)
 {
 	int block_number = -1;
-	unsigned start_index = 0, num_words = 0, first_word_key = 0;
+	unsigned int start_index = 0, num_words = 0, first_word_key = 0;
+	Tuple *curr_tuple;
 	
 	// get the block number
-	Tuple *curr_tuple = dict_find(iterator, (unsigned)APPMESG_BLOCK_NUMBER_KEY);
+	curr_tuple = dict_find(iterator, APPMESG_BLOCK_NUMBER_KEY);
 	if (curr_tuple) {
 		block_number = curr_tuple->value->int32;
 	}
 	// get the starting index of the word within the block
-	curr_tuple = dict_find(iterator, (unsigned)APPMESG_WORD_START_INDEX_KEY);
+	curr_tuple = dict_find(iterator, APPMESG_WORD_START_INDEX_KEY);
 	if (curr_tuple) {
 		start_index = curr_tuple->value->uint32;
 	}
 	// get the number of words
-	curr_tuple = dict_find(iterator, (unsigned)APPMESG_NUM_WORDS_KEY);
+	curr_tuple = dict_find(iterator, APPMESG_NUM_WORDS_KEY);
 	if (curr_tuple) {
 		num_words = curr_tuple->value->uint32;
 	}
 	// get the key for the first actual word in this message
-	curr_tuple = dict_find(iterator, (unsigned)APPMESG_FIRST_WORD_KEY);
+	curr_tuple = dict_find(iterator, APPMESG_FIRST_WORD_KEY);
 	if (curr_tuple) {
 		first_word_key = curr_tuple->value->uint32;
 	}
 	
 	// get each word, in order
-	unsigned word_num = first_word_key;
+	unsigned int word_num = 0;
 	while (word_num < num_words) {
-		curr_tuple = dict_find(iterator, word_num);
+		curr_tuple = dict_find(iterator, first_word_key + word_num);
 		
 		// copy the string out of the Tuple
 		uint16_t word_length = curr_tuple->length;
@@ -310,7 +314,7 @@ static void receive_words(DictionaryIterator *iterator)
 			APP_LOG(APP_LOG_LEVEL_ERROR, "%s:%d: Out of memory.",
 					__func__, __LINE__);
 		}
-		strncpy(copied_word, (const char *)&curr_tuple->value->cstring, word_length);
+		strncpy(copied_word, curr_tuple->value->cstring, word_length);
 		
 		// add the word to the block
 		wl_add_word(copied_word, block_number, start_index + word_num);
@@ -382,7 +386,8 @@ static void _appmesg_send_helper2(DictionaryIterator *iterator,
 	if (dict_result != DICT_OK) { // error handling
 		APP_LOG(APP_LOG_LEVEL_ERROR, "%s:%d: Dict error: %s",
 				__func__, __LINE__, stringify_DictResult(dict_result));
-		goto fail;
+		free(iterator); // not sure if this is necessary
+		return;
 	}
 	
 	// send the message
@@ -394,10 +399,6 @@ static void _appmesg_send_helper2(DictionaryIterator *iterator,
 		APP_LOG(APP_LOG_LEVEL_DEBUG, "%s:%d: Successfully sent message.",
 			   __func__, __LINE__);
 	}
-	
-fail:
-	free(iterator);
-	return;
 }
 
 static void _appmesg_send_int(const int key, const int32_t value)
