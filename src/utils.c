@@ -9,7 +9,7 @@ char * version_to_string(const Version ver)
 {
 	char *ver_str = malloc(sizeof("255.255.255")); // longest possible version number
 	if (!ver_str) {
-		APP_LOG(APP_LOG_LEVEL_ERROR, "%s: Out of memory", __func__);
+		JL_ERROR("Out of memory.");
 		return NULL;
 	}
 	snprintf(ver_str, sizeof(ver_str), "%d.%d.%d", ver.major, ver.minor, ver.patch);

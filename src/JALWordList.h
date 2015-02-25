@@ -15,8 +15,8 @@ void wl_reset(void);
  * @param word_index The index of the word within the block.
  */
 void wl_add_word(const char *new_word,
-				 const unsigned int block_index,
-				 const unsigned int word_index);
+				 const uint32_t block_index,
+				 const uint32_t word_index);
 
 /*!
  * Get the next word, swapping out blocks if necessary.
@@ -34,8 +34,8 @@ const char * wl_next_word(void);
  */
 const char * wl_prev_word(void);
 
-unsigned int wl_get_block_size(void) __attribute__((__pure__));
-void wl_set_block_size(const unsigned int num_words);
+uint32_t wl_get_block_size(void) __attribute__((__pure__));
+void wl_set_block_size(const uint32_t new_block_size);
 
-unsigned int wl_get_total_num_blocks(void) __attribute__((__pure__));
-void wl_set_total_num_blocks(const unsigned int new_total);
+int32_t wl_get_total_num_blocks(void) __attribute__((__pure__));
+void wl_set_total_num_blocks(const int32_t new_total);

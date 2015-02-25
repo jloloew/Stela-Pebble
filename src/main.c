@@ -1,4 +1,5 @@
 #include <pebble.h>
+#include "keys.h"
 #include "JALAppMessage.h"
 #include "JALWordList.h"
 #include "settings_screen.h"
@@ -196,7 +197,7 @@ void change_to_book()
 		text_x = -40;
 		text_y = 73;
 	} else {
-		APP_LOG(APP_LOG_LEVEL_ERROR, "%s Bad font_id: %d", __func__, font_id);
+		JL_ERROR("Bad font_id: %d", font_id);
 	}
 	
 	// we haven't received any text to read yet, let the user know
@@ -401,7 +402,7 @@ static void init()
 	// set up AppMessage
 	appmesg_init();
 	
-	APP_LOG(APP_LOG_LEVEL_DEBUG, "Heap bytes used/free: %d/%d", heap_bytes_used(), heap_bytes_free());
+	JL_DEBUG("Heap bytes used/free: %d/%d", heap_bytes_used(), heap_bytes_free());
 }
 
 

@@ -10,7 +10,7 @@ static Version phone_version = { .major = 0, .minor = 0, .patch = 0 };
 static void receive_block_size_message(Tuple *tuple) __attribute__((nonnull));
 static void receive_words(DictionaryIterator *iterator) __attribute__((nonnull));
 static void receive_error(Tuple *tuple) __attribute__((nonnull));
-static void receive_version_number(Tuple *tuple) __attribute__((nonnull));
+static void receive_version_number(Tuple *major, Tuple *minor, Tuple *patch) __attribute__((nonnull));
 // Sending Messages
 static void send_version_number(void);
 // Helpers for sending messages.
@@ -92,19 +92,16 @@ void appmesg_init(void)
 		(avg_num_words * 7) + // 7 bytes for each Tuple's header
 		(avg_num_words * (avg_word_size + 1)); // Add the size of each word
 	outbox_size = 200;
-	APP_LOG(APP_LOG_LEVEL_DEBUG, "%s:%d: Setting AppMessage inbox/outbox sizes to %d/%d",
-			__func__, __LINE__, inbox_size, outbox_size);
+	JL_DEBUG("Setting AppMessage inbox/outbox sizes to %d/%d", inbox_size, outbox_size);
 	// open AppMessage communication
 	AppMessageResult open_result = app_message_open(inbox_size, outbox_size);
 	*/
 	// open AppMessage communication
 	AppMessageResult open_result = app_message_open(APPMESG_INBOX_SIZE, APPMESG_OUTBOX_SIZE);
 	if (open_result == APP_MSG_OK) {
-		APP_LOG(APP_LOG_LEVEL_DEBUG, "%s:%d: AppMessage opened successfully.",
-			   __func__, __LINE__);
+		JL_DEBUG("AppMessage opened successfully.");
 	} else {
-		APP_LOG(APP_LOG_LEVEL_ERROR, "%s:%d: AppMessage failed to open.",
-			   __func__, __LINE__);
+		JL_ERROR("AppMessage failed to open.");
 		//TODO: update UI to say "not connected" or something
 	}
 }
@@ -137,73 +134,68 @@ void appmesg_send_error(const char *const error_msg)
 	// Route the received iterator to the correct function for processing.
 void appmesg_received_handler(DictionaryIterator *iterator, void *context)
 {
-	APP_LOG(APP_LOG_LEVEL_DEBUG, "%s:%d: Used/free memory: %d/%d",
-				__func__, __LINE__, heap_bytes_used(), heap_bytes_free());
+	JL_DEBUG("Used/free memory: %d/%d", heap_bytes_used(), heap_bytes_free());
 	
 	// safety first
 	if (!iterator) {
-		APP_LOG(APP_LOG_LEVEL_ERROR, "%s:%d: Received NULL dictionary.",
-				__func__, __LINE__);
+		JL_ERROR("Received NULL dictionary.");
 		return;
 	}
 	
 	// log it
-	APP_LOG(APP_LOG_LEVEL_DEBUG, "%s:%d: Received dict of size %u",
-			__func__, __LINE__, (unsigned int)dict_size(iterator));
+	JL_DEBUG("Received dict of size %u", (unsigned int)dict_size(iterator));
 	
 	// check for an error
-	Tuple *curr_tuple = dict_find(iterator, (unsigned)ERROR_KEY);
+	Tuple *curr_tuple = dict_find(iterator, ERROR_KEY);
 	if (curr_tuple) {
 		receive_error(curr_tuple);
 		return;
 	}
 	
 	// check for a version number
-	curr_tuple = dict_find(iterator, (unsigned)STELA_VERSION_KEY);
+	curr_tuple = dict_find(iterator, VERSION_MAJOR_KEY);
 	if (curr_tuple) {
-		receive_version_number(curr_tuple);
+		Tuple *major = curr_tuple;
+		Tuple *minor = dict_find(iterator, VERSION_MINOR_KEY);
+		Tuple *patch = dict_find(iterator, VERSION_PATCH_KEY);
+		receive_version_number(major, minor, patch);
 		return;
 	}
 	
 	// check for a reset command
-	curr_tuple = dict_find(iterator, (unsigned)RESET_KEY);
+	curr_tuple = dict_find(iterator, RESET_KEY);
 	if (curr_tuple) {
 		wl_reset();
 		return;
 	}
 	
 	// check for a block size request
-	curr_tuple = dict_find(iterator, (unsigned)TEXT_BLOCK_SIZE_KEY);
+	curr_tuple = dict_find(iterator, TEXT_BLOCK_SIZE_KEY);
 	if (curr_tuple) {
-		APP_LOG(APP_LOG_LEVEL_DEBUG, "%s:%d: Received a request to change or send the block size.",
-				__func__, __LINE__);
+		JL_DEBUG("Received a request to change or send the block size.");
 		receive_block_size_message(curr_tuple);
-		return;
 	}
 	
-	// check for a block number message
-	curr_tuple = dict_find(iterator, (unsigned)TOTAL_NUMBER_OF_BLOCKS_KEY);
+	// check for a message with the total number of blocks
+	curr_tuple = dict_find(iterator, TOTAL_NUMBER_OF_BLOCKS_KEY);
 	if (curr_tuple) {
 		unsigned int total_num_blocks = curr_tuple->value->uint32;
 		wl_set_total_num_blocks(total_num_blocks);
-		APP_LOG(APP_LOG_LEVEL_DEBUG, "%s:%d: Set the total number of blocks to %d.",
-				__func__, __LINE__, total_num_blocks);
-		return;
+		JL_DEBUG("Set the total number of blocks to %d.", total_num_blocks);
 	}
 	
 	// check for a message with words
-	curr_tuple = dict_find(iterator, (unsigned)APPMESG_BLOCK_NUMBER_KEY);
+	curr_tuple = dict_find(iterator, APPMESG_BLOCK_NUMBER_KEY);
 	if (curr_tuple) {
 		receive_words(iterator);
 		return;
 	}
 	
 	// unable to figure out what's in the message
-	curr_tuple = dict_read_first(iterator);
-	if (curr_tuple) {
-		int32_t key = (int32_t)curr_tuple->key;
-		APP_LOG(APP_LOG_LEVEL_ERROR, "%s:%d: Received message with unknown key: %ld",
-				__func__, __LINE__, key);
+	if (!curr_tuple) {
+		curr_tuple = dict_read_first(iterator);
+		uint32_t key = curr_tuple->key;
+		JL_ERROR("Received message with unknown key: %lu", key);
 	}
 }
 
@@ -211,15 +203,13 @@ void appmesg_received_handler(DictionaryIterator *iterator, void *context)
 void appmesg_not_received_handler(AppMessageResult reason, void *context)
 {
 	// log the error
-	APP_LOG(APP_LOG_LEVEL_ERROR, "%s:%d: %s",
-			__func__, __LINE__, stringify_AppMessageResult(reason));
+	JL_ERROR("%s", stringify_AppMessageResult(reason));
 }
 
 // Successfully sent a message.
 void appmesg_sent_handler(DictionaryIterator *iterator, void *context)
 {
-	APP_LOG(APP_LOG_LEVEL_DEBUG, "%s:%d: Successfully sent message.",
-			__func__, __LINE__);
+	JL_DEBUG("Successfully sent message.");
 }
 
 // An error occurred while sending a message.
@@ -228,8 +218,7 @@ void appmesg_not_sent_handler(DictionaryIterator *iterator,
 							  void *context)
 {
 	// log the error
-	APP_LOG(APP_LOG_LEVEL_ERROR, "%s:%d: %s",
-			__func__, __LINE__, stringify_AppMessageResult(reason));
+	JL_ERROR("%s", stringify_AppMessageResult(reason));
 }
 
 /********** RECEIVE HELPERS **********/
@@ -243,13 +232,11 @@ static void receive_block_size_message(Tuple *tuple)
 	// verify the value's type and size are correct
 	TupleType value_type = tuple->type;
 	if (value_type != TUPLE_INT) {
-		APP_LOG(APP_LOG_LEVEL_ERROR, "%s:%d: Requested block size is not a signed int value.",
-				__func__, __LINE__);
+		JL_ERROR("Requested block size is not a signed int value.");
 		return;
 	}
 	if (tuple->length != 4) {
-		APP_LOG(APP_LOG_LEVEL_ERROR, "%s:%d: Requested block size is not a 32-bit value.",
-				__func__, __LINE__);
+		JL_ERROR("Requested block size is not a 32-bit value.");
 		return;
 	}
 	
@@ -263,8 +250,7 @@ static void receive_block_size_message(Tuple *tuple)
 		// negate it before we send it, so it's not a command.
 		value = -value;
 	} else {
-		APP_LOG(APP_LOG_LEVEL_DEBUG, "%s:%d: The phone's block size is %d.",
-				__func__, __LINE__, -value);
+		JL_DEBUG("The phone's block size is %d.", -value);
 	}
 	
 	// Send our block size to the phone, whether or not we changed ours.
@@ -311,8 +297,7 @@ static void receive_words(DictionaryIterator *iterator)
 		}
 		char *copied_word = malloc(word_length * sizeof(char));
 		if (!copied_word) {
-			APP_LOG(APP_LOG_LEVEL_ERROR, "%s:%d: Out of memory.",
-					__func__, __LINE__);
+			JL_ERROR("Out of memory.");
 		}
 		strncpy(copied_word, curr_tuple->value->cstring, word_length);
 		
@@ -322,27 +307,26 @@ static void receive_words(DictionaryIterator *iterator)
 		word_num++;
 	}
 	
-	APP_LOG(APP_LOG_LEVEL_DEBUG, "%s:%d: Added %d words.",
-			__func__, __LINE__, word_num);
+	JL_DEBUG("Added %d words.", word_num);
 }
 
 static void receive_error(Tuple *tuple)
 {
 	if (tuple->type == TUPLE_CSTRING) {
 		const char *error_message = (const char *)&tuple->value->cstring;
-		APP_LOG(APP_LOG_LEVEL_ERROR, "%s:%d: %s",
-				__func__, __LINE__, error_message);
+		JL_ERROR("%s", error_message);
 	} else {
-		APP_LOG(APP_LOG_LEVEL_ERROR, "%s:%d: Received non-string error.",
-				__func__, __LINE__);
+		JL_ERROR("Received non-string error.");
 	}
 }
 
-static void receive_version_number(Tuple *tuple)
+static void receive_version_number(Tuple *major, Tuple *minor, Tuple *patch)
 {
-	const char *ver_str = (const char *)&tuple->value->cstring;
-	// parse out the version
-	const Version ver = string_to_version(ver_str);
+	VERSION_MAJOR_KEY_t v_major = major->value->uint8;
+	VERSION_MINOR_KEY_t v_minor = minor->value->uint8;
+	VERSION_PATCH_KEY_t v_patch = patch->value->uint8;
+	
+	Version const ver = { .major = v_major, .minor = v_minor, .patch = v_patch };
 	
 	// If the major is 0, it's a request for our version number.
 	// Else, the phone is sending its version number.
@@ -350,8 +334,7 @@ static void receive_version_number(Tuple *tuple)
 		send_version_number();
 	} else {
 		phone_version = ver;
-		APP_LOG(APP_LOG_LEVEL_DEBUG, "%s:%d: Phone has version %s",
-				__func__, __LINE__, ver_str);
+		JL_DEBUG("Phone has version %s", version_to_string(ver));
 	}
 }
 
@@ -359,12 +342,17 @@ static void receive_version_number(Tuple *tuple)
 
 static void send_version_number(void)
 {
-	// stringify the version number
-	char *ver_str = version_to_string(PEBBLE_STELA_VERSION);
-	
-	_appmesg_send_cstring(STELA_VERSION_KEY, ver_str);
-	
-	free(ver_str);
+	DictionaryIterator *iterator = _appmesg_send_helper1();
+	// add the data to the outgoing message
+	DictionaryResult dict_result;
+	dict_result = dict_write_uint8(iterator, VERSION_MAJOR_KEY, PEBBLE_STELA_VERSION.major);
+	if (dict_result == DICT_OK) {
+		dict_result = dict_write_uint8(iterator, VERSION_MINOR_KEY, PEBBLE_STELA_VERSION.minor);
+	}
+	if (dict_result == DICT_OK) {
+		dict_result = dict_write_uint8(iterator, VERSION_PATCH_KEY, PEBBLE_STELA_VERSION.patch);
+	}
+	_appmesg_send_helper2(iterator, dict_result);
 }
 
 static DictionaryIterator * _appmesg_send_helper1(void)
@@ -374,8 +362,7 @@ static DictionaryIterator * _appmesg_send_helper1(void)
 	AppMessageResult appmesg_result = app_message_outbox_begin(&iterator);
 	if (appmesg_result != APP_MSG_OK) {
 		// failure
-		APP_LOG(APP_LOG_LEVEL_ERROR, "%s:%d: Unable to open outbox while preparing: %s",
-				__func__, __LINE__, stringify_AppMessageResult(appmesg_result));
+		JL_ERROR("Unable to open outbox while preparing: %s", stringify_AppMessageResult(appmesg_result));
 	}
 	return iterator;
 }
@@ -384,8 +371,7 @@ static void _appmesg_send_helper2(DictionaryIterator *iterator,
 								  const DictionaryResult dict_result)
 {
 	if (dict_result != DICT_OK) { // error handling
-		APP_LOG(APP_LOG_LEVEL_ERROR, "%s:%d: Dict error: %s",
-				__func__, __LINE__, stringify_DictResult(dict_result));
+		JL_ERROR("Dict error: %s", stringify_DictResult(dict_result));
 		free(iterator); // not sure if this is necessary
 		return;
 	}
@@ -393,11 +379,9 @@ static void _appmesg_send_helper2(DictionaryIterator *iterator,
 	// send the message
 	AppMessageResult appmesg_result = app_message_outbox_send();
 	if (appmesg_result != APP_MSG_OK) {
-		APP_LOG(APP_LOG_LEVEL_ERROR, "%s:%d: Error sending message: %s",
-				__func__, __LINE__, stringify_AppMessageResult(appmesg_result));
+		JL_ERROR("Error sending message: %s", stringify_AppMessageResult(appmesg_result));
 	} else {
-		APP_LOG(APP_LOG_LEVEL_DEBUG, "%s:%d: Successfully sent message.",
-			   __func__, __LINE__);
+		JL_DEBUG("Successfully sent message.");
 	}
 }
 
