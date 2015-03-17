@@ -118,6 +118,8 @@ void redraw_text(int type)
 // It gets the next word every so often.
 static void timer_callback(void *data __attribute__((unused)))
 {
+	JL_DEBUG("timer_callback() called");
+	
 	if (!pause) {
 		redraw_text(0);
 	} else {

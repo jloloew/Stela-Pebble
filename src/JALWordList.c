@@ -63,21 +63,14 @@ void wl_add_word(const char *new_word,
 				 const uint32_t block_index,
 				 const uint32_t word_index)
 {
-	JL_DEBUG("reached.");
+	JL_DEBUG("wl_add_word() called");
 	
 	// safety checks
 	if (word_index >= block_size || !new_word) {
 		return;
 	}
 	
-	// Start reading the first time this method is called.
-	static bool change_to_book_done = false;
-	if (!change_to_book_done) {
-		change_to_book_done = true;
-		change_to_book();
-	}
-	
-	JL_DEBUG("reached.");
+	JL_DEBUG("add word reached.");
 	
 	// Check if the block for this word is the curr_block.
 	// If it doesn't go in the current block, put it into the alt_block.
@@ -88,12 +81,12 @@ void wl_add_word(const char *new_word,
 	} else if ((signed)block_index == alt_block->block_index) {
 		dest_block = alt_block;
 	} else {
-		JL_DEBUG("reached.");
+		JL_DEBUG("block wipe reached.");
 		
 		// we have no data for this saved block. Wipe the alt_block clean and use that.
 		block_destroy(alt_block);
 		
-		JL_DEBUG("reached.");
+		JL_DEBUG("alt_block destroyed");
 		
 		alt_block = block_create();
 		if (!alt_block) { // safety check
@@ -108,11 +101,22 @@ void wl_add_word(const char *new_word,
 	// actually add the word to the block
 	free((char *)dest_block->words[word_index]);
 	dest_block->words[word_index] = new_word;
+	
+	JL_DEBUG("added word");
+	
+	// Start reading the first time this method is called.
+	static bool change_to_book_done = false;
+	if (!change_to_book_done) {
+		change_to_book_done = true;
+		change_to_book();
+	}
 }
 
 	// returns NULL on error
 const char * wl_next_word(void)
 {
+	JL_DEBUG("wl_next_word called");
+	
 	int32_t next_block_index = curr_block->block_index + 1;
 	int32_t next_word_index = curr_word_index + 1;
 	
@@ -186,27 +190,6 @@ void wl_set_block_size(const uint32_t new_block_size)
 		return; // nothing to do
 	}
 	
-	/*
-	// calculate the absolute index of the current word
-	int abs_word_index;
-	if (curr_word_index < 0 || !curr_block || curr_block->block_index < 0) {
-		abs_word_index = -1;
-	} else {
-		abs_word_index = block_size * curr_block->block_index;
-		abs_word_index += curr_word_index;
-	}
-	// calculate the block index of the current word
-	int new_block_index;
-	if (abs_word_index < 0) {
-		new_block_index = -1;
-	} else {
-		new_block_index = abs_word_index / new_block_size;
-		// set the curr_word_index and pause
-		curr_word_index = abs_word_index % new_block_size;
-		//TODO: pause
-	}
-	*/
-	
 	// destroy the old blocks
 	block_destroy(curr_block);
 	block_destroy(alt_block);
@@ -215,13 +198,6 @@ void wl_set_block_size(const uint32_t new_block_size)
 	// create new, empty blocks
 	curr_block = block_create();
 	alt_block  = block_create();
-	
-	/*
-	// request the new current block
-	if (new_block_index >= 0) {
-		appmesg_request_block((unsigned)new_block_index);
-	}
-	*/
 }
 
 int32_t wl_get_total_num_blocks(void)

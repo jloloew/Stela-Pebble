@@ -65,7 +65,7 @@
 
 	// Log warnings.
 #if JL_ENABLE_LOG_LEVEL_WARNING
-	#define JL_WARNING2(fmt, ...) JL_AUGMENT_FORMAT_STRING(APP_LOG_LEVEL_ERROR, fmt , ##__VA_ARGS__)
+	#define JL_WARNING2(fmt, ...) JL_AUGMENT_FORMAT_STRING(APP_LOG_LEVEL_WARNING, fmt , ##__VA_ARGS__)
 #else
 	#define JL_WARNING2(fmt, ...)
 #endif
@@ -73,7 +73,7 @@
 
 	// Log information.
 #if JL_ENABLE_LOG_LEVEL_INFO
-	#define JL_INFO2(fmt, ...) JL_AUGMENT_FORMAT_STRING(APP_LOG_LEVEL_ERROR, fmt , ##__VA_ARGS__)
+	#define JL_INFO2(fmt, ...) JL_AUGMENT_FORMAT_STRING(APP_LOG_LEVEL_INFO, fmt , ##__VA_ARGS__)
 #else
 	#define JL_INFO2(fmt, ...)
 #endif
@@ -89,7 +89,7 @@
 
 	// Log verbose debug messages.
 #if JL_ENABLE_LOG_LEVEL_DEBUG_VERBOSE
-	#define JL_DEBUG_VERBOSE2(fmt, ...) JL_AUGMENT_FORMAT_STRING(APP_LOG_LEVEL_DEBUG, fmt , ##__VA_ARGS__)
+	#define JL_DEBUG_VERBOSE2(fmt, ...) JL_AUGMENT_FORMAT_STRING(APP_LOG_LEVEL_DEBUG_VERBOSE, fmt , ##__VA_ARGS__)
 #else
 	#define JL_DEBUG_VERBOSE2(fmt, ...)
 #endif
