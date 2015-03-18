@@ -134,7 +134,7 @@ void appmesg_send_error(const char *const error_msg)
 	// Route the received iterator to the correct function for processing.
 void appmesg_received_handler(DictionaryIterator *iterator, void *context)
 {
-	JL_DEBUG("Used/free memory: %d/%d", heap_bytes_used(), heap_bytes_free());
+//	JL_DEBUG("Used/free memory: %d/%d", heap_bytes_used(), heap_bytes_free());
 	
 	// safety first
 	if (!iterator) {
@@ -144,6 +144,9 @@ void appmesg_received_handler(DictionaryIterator *iterator, void *context)
 	
 	// log it
 	JL_DEBUG("Received dict of size %u", (unsigned int)dict_size(iterator));
+	JL_IF_DEBUG {
+		log_dictionary(iterator);
+	}
 	
 	// check for an error
 	Tuple *curr_tuple = dict_find(iterator, ERROR_KEY);

@@ -26,7 +26,7 @@ static bool wl_should_swap_blocks(const bool is_rewinding) __attribute__((pure))
 static Block * block_create(void);
 static void block_destroy(Block *target) __attribute__((nonnull));
 static void swap_blocks(void);
-
+static void block_print_description(Block *block);
 
 /********** PUBLIC FUNCTIONS **********/
 
@@ -63,18 +63,14 @@ void wl_add_word(const char *new_word,
 				 const uint32_t block_index,
 				 const uint32_t word_index)
 {
-	JL_DEBUG("wl_add_word() called");
-	
 	// safety checks
 	if (word_index >= block_size || !new_word) {
 		return;
 	}
 	
-	JL_DEBUG("add word reached.");
-	
 	// Check if the block for this word is the curr_block.
 	// If it doesn't go in the current block, put it into the alt_block.
-	Block *dest_block; // the block to write the word into
+	Block *dest_block;
 	// check the index of the blocks we have
 	if ((signed)block_index == curr_block->block_index) {
 		dest_block = curr_block;
@@ -83,11 +79,8 @@ void wl_add_word(const char *new_word,
 	} else {
 		JL_DEBUG("block wipe reached.");
 		
-		// we have no data for this saved block. Wipe the alt_block clean and use that.
+		// We have no data for this saved block. Wipe alt_block clean and use that.
 		block_destroy(alt_block);
-		
-		JL_DEBUG("alt_block destroyed");
-		
 		alt_block = block_create();
 		if (!alt_block) { // safety check
 			JL_ERROR("Unable to allocate new alt_block.");
@@ -96,13 +89,15 @@ void wl_add_word(const char *new_word,
 		// set up the new alt_block
 		alt_block->block_index = block_index;
 		dest_block = alt_block;
+		// make sure that if we only have one block, it's curr_block
+		if (curr_block->block_index < 0) {
+			swap_blocks();
+		}
 	}
 	
 	// actually add the word to the block
 	free((char *)dest_block->words[word_index]);
 	dest_block->words[word_index] = new_word;
-	
-	JL_DEBUG("added word");
 	
 	// Start reading the first time this method is called.
 	static bool change_to_book_done = false;
@@ -115,7 +110,7 @@ void wl_add_word(const char *new_word,
 	// returns NULL on error
 const char * wl_next_word(void)
 {
-	JL_DEBUG("wl_next_word called");
+//	JL_DEBUG("wl_next_word called");
 	
 	int32_t next_block_index = curr_block->block_index + 1;
 	int32_t next_word_index = curr_word_index + 1;
@@ -293,13 +288,18 @@ error:
 static void block_destroy(Block *target)
 {
 	JL_DEBUG("Destroying block %p", target);
-	if (target == curr_block) {
+	if (target == curr_block && target == alt_block) {
+		JL_DEBUG("Destroying curr_block/alt_block (they're the same block)");
+		curr_block = NULL;
+		alt_block = NULL;
+	} else if (target == curr_block) {
 		JL_DEBUG("Destroying curr_block");
 		curr_block = NULL;
-	}
-	if (target == alt_block) {
+	} else if (target == alt_block) {
 		JL_DEBUG("Destroying alt_block");
 		alt_block = NULL;
+	} else {
+		JL_DEBUG("Destroying unknown block");
 	}
 	
 	if (!target) { // safety check
@@ -326,4 +326,33 @@ static void swap_blocks(void)
 	
 	JL_DEBUG("Swapped blocks. Curr is now block %d and alt is block %d.",
 			 (int)curr_block->block_index, (int)alt_block->block_index);
+}
+
+/********** DEBUGGING HELPER FUNCTIONS **********/
+
+static void block_print_description(Block *block)
+{
+	if (!block) {
+		JL_DEBUG("\nPrinting block at NULL!!!!!!!!!!!!!!!!!!!!!!");
+		return;
+	}
+	
+	/*
+	JL_DEBUG("\nPrinting block at address %p (%s)\nIndex: %d\nSize of words: %ul\nGlobal block size: %u\nGlobal total number of blocks: %d\n",
+			 block,
+			 (block == curr_block) ? "curr_block" : (block == alt_block) ? "alt_block" : "unknown block",
+			 (int)block->block_index, sizeof(block->words), (unsigned int)block_size, (int)total_num_blocks);
+	/*/
+	JL_DEBUG("Printing block at address %p (%s)", block,
+			 (block == curr_block) ? "curr_block" : (block == alt_block) ? "alt_block" : "unknown block");
+	JL_DEBUG("Index: %d", (int)block->block_index);
+	JL_DEBUG("Size of words: %ul", sizeof(block->words));
+	JL_DEBUG("Global block size: %u", (unsigned int)block_size);
+	JL_DEBUG("Global total number of blocks: %d", (int)total_num_blocks);
+	//*/
+	// print words
+	for (uint32_t i = 0; i < block_size; i++)
+		if (block->words[i])
+			JL_DEBUG("\t%u:\t%s", (unsigned int)i, block->words[i]);
+	JL_DEBUG("\n\n");
 }

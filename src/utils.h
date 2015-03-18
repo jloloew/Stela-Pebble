@@ -30,6 +30,14 @@ char * version_to_string(const Version ver);
 Version string_to_version(const char * const str) __attribute__((nonnull));
 
 /*!
+ * Prettify and log an entire Dictionary. This function only outputs
+ * when verbose logging is enabled.
+ * 
+ * @param iterator An iterator corresponding to dictionary to be logged.
+ */
+void log_dictionary(DictionaryIterator *iterator);
+
+/*!
  * Turns an AppMessageResult returned by an AppMessage function into its description. For debugging purposes.
  * 
  * @param reason The return code to stringify.

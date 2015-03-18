@@ -1,4 +1,5 @@
 #include "utils.h"
+#include "JL_DEBUG.h"
 #include <pebble.h>
 
 
@@ -42,6 +43,39 @@ Version string_to_version(const char * const str)
 	ver.minor = values[1];
 	ver.patch = values[2];
 	return ver;
+}
+
+void log_dictionary(DictionaryIterator *iterator)
+{
+	// print the contents of the dictionary
+	JL_VERBOSE("{");
+	uint32_t wide_val __attribute__((unused)); // silence that damn compiler
+	wide_val = 0;
+	Tuple *tuple = dict_read_first(iterator);
+	while (tuple) {
+		if (tuple->type == TUPLE_CSTRING) {
+			JL_VERBOSE("\t%ul:\t\"%s\",", (unsigned int)tuple->key, tuple->value->cstring);
+		} else if (tuple->type == TUPLE_UINT || tuple->type == TUPLE_INT) {
+			if (tuple->length == 1) {
+				wide_val = (uint32_t)tuple->value->uint8;
+			} else if (tuple->length == 2) {
+				wide_val = (uint32_t)tuple->value->uint16;
+			} else if (tuple->length == 4) {
+				wide_val = (uint32_t)tuple->value->uint32;
+			}
+			
+			if (tuple->type == TUPLE_UINT) {
+				JL_VERBOSE("\t%ul:\t0x%04X,", (unsigned int)tuple->key, (unsigned int)wide_val);
+			} else if (tuple->type == TUPLE_INT) {
+				JL_VERBOSE("\t%ul:\t0x%04X,", (unsigned int)tuple->key, (int)wide_val);
+			}
+		} else {
+			JL_VERBOSE("\t%ul:\t<<unsupported tuple type>>,", (unsigned int)tuple->key);
+		}
+		
+		tuple = dict_read_next(iterator);
+	}
+	JL_VERBOSE("}");
 }
 
 const char * stringify_AppMessageResult(const AppMessageResult reason)
