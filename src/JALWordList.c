@@ -2,6 +2,7 @@
 #include "utils.h"
 #include "JALAppMessage.h"
 #include "JALWordList.h"
+#include "reading_controller.h"
 
 
 //TODO: fix this, make it nice
@@ -26,7 +27,7 @@ static bool wl_should_swap_blocks(const bool is_rewinding) __attribute__((pure))
 static Block * block_create(void);
 static void block_destroy(Block *target) __attribute__((nonnull));
 static void swap_blocks(void);
-static void block_print_description(Block *block);
+static void block_print_description(Block *block) __attribute__((unused));
 
 /********** PUBLIC FUNCTIONS **********/
 
@@ -103,7 +104,11 @@ void wl_add_word(const char *new_word,
 	static bool change_to_book_done = false;
 	if (!change_to_book_done) {
 		change_to_book_done = true;
+#if READING_CONTROLLER_ENABLE
+		rc_did_receive_first_word();
+#else
 		change_to_book();
+#endif // READING_CONTROLLER_ENABLE
 	}
 }
 

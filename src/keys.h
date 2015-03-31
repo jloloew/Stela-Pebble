@@ -2,6 +2,9 @@
 #include "JL_DEBUG.h"
 
 
+#define READING_CONTROLLER_ENABLE 0
+
+
 /*!
  * Keys for received AppMessages.
  * Negative values are control.

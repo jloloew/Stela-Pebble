@@ -3,11 +3,14 @@
 #include "JALAppMessage.h"
 #include "JALWordList.h"
 #include "settings_screen.h"
+#include "reading_controller.h"
 
 
 #define ACCEL_STEP_MS     50
 #define MAX_READING_SPEED 95
 #define MIN_READING_SPEED 20
+
+//#define READING_CONTROLLER_ENABLE 0
 
 
 static Window *window;
@@ -226,8 +229,15 @@ void change_to_book()
 	bitmap_layer_set_bitmap(image_layer, game_bg);
 	bitmap_layer_set_alignment(image_layer, GAlignCenter);
 	
+#if READING_CONTROLLER_ENABLE
+	rc_did_receive_first_word();
+	
+	
+	
+#else
 	// start periodic updates to update the word that's currently on-screen
 	timer = app_timer_register(ACCEL_STEP_MS, timer_callback, NULL);
+#endif // READING_CONTROLLER_ENABLE
 }
 
 
@@ -245,6 +255,10 @@ void up_click_handler(ClickRecognizerRef recognizer, void *context __attribute__
 		}
 		break;
 	case BOOK:
+#if READING_CONTROLLER_ENABLE
+		rc_increase_reading_speed();
+		break;
+#else
 		if (pause) {
 			// do nothing
 		} else {
@@ -260,6 +274,7 @@ void up_click_handler(ClickRecognizerRef recognizer, void *context __attribute__
 			}
 		}
 		break;
+#endif // READING_CONTROLLER_ENABLE
 	}
 }
 
@@ -292,6 +307,10 @@ void middle_click_handler(ClickRecognizerRef recognizer, void *context __attribu
 			text_layer_set_font(curr_reading_word_layer, disp_font);
 			break;
 		case BOOK:
+#if READING_CONTROLLER_ENABLE
+			rc_set_paused(!rc_is_paused());
+			break;
+#else
 			pause = !pause;
 			if (pause == true) {
 				bitmap_layer_set_bitmap(rewind_layer, pause_icon);
@@ -299,6 +318,7 @@ void middle_click_handler(ClickRecognizerRef recognizer, void *context __attribu
 				bitmap_layer_set_bitmap(rewind_layer, nothing_icon);
 			}
 			break;
+#endif // READING_CONTROLLER_ENABLE
 	}
 }
 
@@ -306,43 +326,56 @@ void middle_click_handler(ClickRecognizerRef recognizer, void *context __attribu
 void down_click_handler(ClickRecognizerRef recognizer, void *context __attribute__((unused)))
 {
 	switch (frame) {
-		case MENU:
-			// do nothing
-			break;
-		case SETTINGS:
-			// do nothing
-			break;
-		case BOOK:
-			if (pause) {
-				// start rewinding
-				end = false;
-				hold = 0;
-				redraw_text(1);
-				fast_rewind = true;
-				bitmap_layer_set_bitmap(rewind_layer, rewind_icon);
-			} else {
-				// decrease reading speed
-				if (speed > MIN_READING_SPEED) {
-					speed -= 5;
-					con_timer = 50;
-					// update the text label
-				char label[10];
-				snprintf(label, sizeof(label), "%d WPM", speed);
-				text_layer_set_text(info_text_layer, label);
-					//TODO: update the timer's fire interval
-				}
+	case MENU:
+		// do nothing
+		break;
+	case SETTINGS:
+		// do nothing
+		break;
+	case BOOK:
+#if READING_CONTROLLER_ENABLE
+		if (rc_is_paused()) {
+			rc_set_rewinding(true);
+		} else {
+			rc_decrease_reading_speed();
+		}
+		break;
+#else
+		if (pause) {
+			// start rewinding
+			end = false;
+			hold = 0;
+			redraw_text(1);
+			fast_rewind = true;
+			bitmap_layer_set_bitmap(rewind_layer, rewind_icon);
+		} else {
+			// decrease reading speed
+			if (speed > MIN_READING_SPEED) {
+				speed -= 5;
+				con_timer = 50;
+				// update the text label
+			char label[10];
+			snprintf(label, sizeof(label), "%d WPM", speed);
+			text_layer_set_text(info_text_layer, label);
+				//TODO: update the timer's fire interval
 			}
-			break;
+		}
+		break;
+#endif // READING_CONTROLLER_ENABLE
 	}
 }
 
 
 void down_up_click_handler(ClickRecognizerRef recognizer, void *context __attribute__((unused)))
 {
+#if READING_CONTROLLER_ENABLE
+	rc_set_rewinding(false);
+#else
 	fast_rewind = false;
 	if (pause) {
 		bitmap_layer_set_bitmap(rewind_layer, pause_icon);
 	}
+#endif // READING_CONTROLLER_ENABLE
 }
 
 
