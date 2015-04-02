@@ -16,7 +16,7 @@
 #define JL_DEBUG_DEFINED
 
 	/// Enable or disable this whole system
-#define JL_DEBUG_ENABLED 1
+#define JL_DEBUG_ENABLED 0
 
 	// What to add to the logging messages
 #define JL_ADD_FILE_TO_LOGS	0

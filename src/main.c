@@ -10,8 +10,6 @@
 #define MAX_READING_SPEED 95
 #define MIN_READING_SPEED 20
 
-//#define READING_CONTROLLER_ENABLE 0
-
 
 static Window *window;
 static TextLayer *curr_reading_word_layer;
@@ -40,6 +38,7 @@ enum {
 } frame;
 int text_x       = -20;
 int text_y       = 70;
+static int16_t text_margin = 3; // the minimum spacing between the edge of the screen and the on-screen text.
 int speed        = 40;
 int con_timer    = 0;
 int hold         = 5; // some sort of timer
@@ -53,6 +52,8 @@ bool menu        = true;
 const char *word = NULL;
 	// The size of the word being displayed.
 int size_of_word = 256;
+	// The horizontal resolution of the Pebble's screen.
+static int16_t pebble_window_width = 144;
 
 
 	// type:
@@ -66,6 +67,7 @@ void redraw_text(int type)
 	
 	if (hold < 0 || type > 0) {
 		GRect move_pos2 = (GRect) { .origin = { text_x, text_y }, .size = { 180, 180 } };
+		GSize text_size = { .w = 0, .h = 0 };
 		
 		if (type == 0) {
 			word = wl_next_word() ?: "";
@@ -101,18 +103,53 @@ void redraw_text(int type)
 			} else { // size_of_word > 20
 				shift_x = 8;
 			}
+			shift_x *= 4;
 			
-			GSize size = graphics_text_layout_get_content_size(word, disp_font, move_pos2, GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter);
-			int16_t size_x = size.w;
+			text_size = graphics_text_layout_get_content_size(
+				word, disp_font, move_pos2, GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter
+			);
+			int16_t size_x = text_size.w;
+			JL_DEBUG("Content size: (%d, %d)", text_size.w, text_size.h);
 			
-			push_x = (size_x / 2) - 2*shift_x;
-			//			APP_LOG(APP_LOG_LEVEL_DEBUG,"word = %s push = %d", word, push_x);
-			
+			push_x = (size_x / 2) - 2*shift_x + 5;
 		}
+		
 		move_pos2 = (GRect) { .origin = { text_x + push_x - 5, text_y }, .size = { 180, 180 } };
+		// constrain move_pos2 to the bounds of the window
+		static int16_t max_text_width = 0;
+		if (max_text_width == 0) {
+			max_text_width = pebble_window_width - 2 * text_margin;
+		}
+		
+		if (text_size.w > max_text_width) {
+			JL_ERROR("Word is too wide for the screen! Max width is %d, word width is %d, word is %s",
+					(int)max_text_width, (int)text_size.w, word);
+		} else {
+			int16_t center_x = move_pos2.origin.x + (move_pos2.size.w / 2);
+			int16_t right_overshoot = (center_x + (text_size.w / 2)) - pebble_window_width - text_margin;
+			if (right_overshoot > 0) {
+				move_pos2.origin.x -= right_overshoot;
+				JL_DEBUG("Corrected right overshoot of %d px.", (int)right_overshoot);
+				// recalculate center
+				center_x = move_pos2.origin.x + (move_pos2.size.w / 2);
+			}
+			int16_t left_overshoot = text_margin - (center_x - (text_size.w / 2));
+			// move the word farther right if it's going off the left side of the screen
+			if (left_overshoot > 0) {
+				move_pos2.origin.x += left_overshoot;
+				JL_DEBUG("Corrected left overshoot of %d px.", (int)left_overshoot);
+				// recalculate center
+				center_x = move_pos2.origin.x + (move_pos2.size.w / 2);
+			}
+		}
+		
 		text_layer_set_text(curr_reading_word_layer, word);
 		
 		layer_set_frame(text_layer_get_layer(curr_reading_word_layer), move_pos2);
+		
+		JL_DEBUG("Frame: origin = (%d, %d), size = (%d, %d)",
+				 move_pos2.origin.x, move_pos2.origin.y,
+				 move_pos2.size.w, move_pos2.size.h);
 	}
 }
 
@@ -215,11 +252,6 @@ void change_to_book()
 	
 	GRect move_pos2 = (GRect) { .origin = { text_x, text_y }, .size = { 180, 180 } };
 	layer_set_frame(text_layer_get_layer(curr_reading_word_layer), move_pos2);
-	/*
-	 GRect move_pos3 = (GRect) { .origin = { -15, 130 }, .size = { 180, 180 } };
-	 layer_set_frame(text_layer_get_layer(info_text_layer), move_pos3);
-  */
-	// text_layer_set_font(info_text_layer, disp_font);
 	
 	GRect move_pos4 = (GRect) { .origin = { -18, 0 }, .size = { 180, 180 } };
 	layer_set_frame(bitmap_layer_get_layer(image_layer), move_pos4);
@@ -231,7 +263,6 @@ void change_to_book()
 	
 #if READING_CONTROLLER_ENABLE
 	rc_did_receive_first_word();
-	
 	
 	
 #else
@@ -390,27 +421,26 @@ void config_provider(void *context __attribute__((unused)))
 
 static void init()
 {
-//	show_settings_screen(); return;
 	// Set up the UI
 	
 	window = window_create();
 	window_set_fullscreen(window, true);
-	window_stack_push(window, true /* Animated */);
+	window_stack_push(window, true /* animated */);
 	window_set_click_config_provider(window, config_provider);
 	window_layer = window_get_root_layer(window);
 	GRect bounds = layer_get_bounds(window_layer);
 	
-	curr_reading_word_layer    = text_layer_create(bounds);
-	info_text_layer = text_layer_create(bounds);
-	image_layer     = bitmap_layer_create(bounds);
-	rewind_layer    = bitmap_layer_create(bounds);
+	curr_reading_word_layer	= text_layer_create(bounds);
+	info_text_layer			= text_layer_create(bounds);
+	image_layer				= bitmap_layer_create(bounds);
+	rewind_layer			= bitmap_layer_create(bounds);
 	
-	image        = gbitmap_create_with_resource(RESOURCE_ID_IMAGE_STELA_ICON);
-	font_banner  = gbitmap_create_with_resource(RESOURCE_ID_IMAGE_FONT_BANNER);
-	game_bg      = gbitmap_create_with_resource(RESOURCE_ID_IMAGE_GAME_PANE_BLACK);
-	rewind_icon  = gbitmap_create_with_resource(RESOURCE_ID_IMAGE_REWIND);
-	pause_icon   = gbitmap_create_with_resource(RESOURCE_ID_IMAGE_PAUSE);
-	nothing_icon = gbitmap_create_with_resource(RESOURCE_ID_IMAGE_NOTHING);
+	image			= gbitmap_create_with_resource(RESOURCE_ID_IMAGE_STELA_ICON);
+	font_banner		= gbitmap_create_with_resource(RESOURCE_ID_IMAGE_FONT_BANNER);
+	game_bg			= gbitmap_create_with_resource(RESOURCE_ID_IMAGE_GAME_PANE_BLACK);
+	rewind_icon		= gbitmap_create_with_resource(RESOURCE_ID_IMAGE_REWIND);
+	pause_icon		= gbitmap_create_with_resource(RESOURCE_ID_IMAGE_PAUSE);
+	nothing_icon	= gbitmap_create_with_resource(RESOURCE_ID_IMAGE_NOTHING);
 	
 	disp_font = fonts_get_system_font(fonts[0]);
 	text_layer_set_font(curr_reading_word_layer, disp_font);
@@ -422,9 +452,9 @@ static void init()
 	
 	change_to_menu();
 	
-	text_layer_set_text_alignment(curr_reading_word_layer,    GTextAlignmentCenter);
-	text_layer_set_text_alignment(info_text_layer, GTextAlignmentCenter);
-	text_layer_set_overflow_mode(info_text_layer,  GTextOverflowModeWordWrap);
+	text_layer_set_text_alignment(curr_reading_word_layer,	GTextAlignmentCenter);
+	text_layer_set_text_alignment(info_text_layer,			GTextAlignmentCenter);
+	text_layer_set_overflow_mode(info_text_layer,			GTextOverflowModeWordWrap);
 	
 	layer_add_child(window_layer, text_layer_get_layer(curr_reading_word_layer));
 	layer_add_child(window_layer, text_layer_get_layer(info_text_layer));
